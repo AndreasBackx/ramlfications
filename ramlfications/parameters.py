@@ -7,6 +7,7 @@ import attr
 import markdown2 as md
 
 from .validate import *  # NOQA
+from six import iteritems
 
 HTTP_METHODS = [
     "get", "post", "put", "delete", "patch", "options",
@@ -99,7 +100,6 @@ class BaseParameter(object):
                            validator=string_type_parameter)
     enum         = attr.ib(repr=False, default=None,
                            validator=string_type_parameter)
-    type         = attr.ib(repr=False, default="string")
 
     @property
     def description(self):
@@ -117,6 +117,60 @@ class BaseParameter(object):
                         attr = getattr(param, n, None)
                         setattr(self, n, attr)
 
+    @staticmethod
+    def _get(data, item, default=None):
+        """
+        Helper function to catch empty mappings in RAML. If item is optional
+        but not in the data, or data is ``None``, the default value is returned.
+
+        :param data: RAML data
+        :param str item: RAML key
+        :param default: default value if item is not in dict
+        :param bool optional: If RAML item is optional or needs to be defined
+        :ret: value for RAML key
+        """
+        try:
+            return data.get(item, default)
+        except AttributeError:
+            return default
+
+    @classmethod
+    def init_list(cls, attribute_data, config, errors=[], **kwargs):
+        """Initialise a list of BaseParameters out of a list of attributes."""
+        objects = []
+
+        for key, value in list(iteritems(attribute_data)):
+            if cls is URIParameter:
+                required = cls._get(value, "required", default=True)
+            else:
+                required = cls._get(value, "required", default=False)
+            arguments = dict(
+                name=key,
+                raw={key: value},
+                desc=cls._get(value, "description"),
+                display_name=cls._get(value, "displayName", key),
+                min_length=cls._get(value, "minLength"),
+                max_length=cls._get(value, "maxLength"),
+                minimum=cls._get(value, "minimum"),
+                maximum=cls._get(value, "maximum"),
+                default=cls._get(value, "default"),
+                enum=cls._get(value, "enum"),
+                example=cls._get(value, "example"),
+                required=required,
+                repeat=cls._get(value, "repeat", False),
+                pattern=cls._get(value, "pattern"),
+                type=cls._get(value, "type", "string"),
+                config=config,
+                errors=errors
+            )
+            if cls is Header:
+                arguments["method"] = cls._get(kwargs, "method")
+
+            item = cls(**arguments)
+            objects.append(item)
+
+        return objects or None
+
 
 @attr.s
 class URIParameter(BaseParameter):
@@ -125,7 +179,8 @@ class URIParameter(BaseParameter):
     "Named Parameters" section, e.g.: ``/foo/{id}`` where ``id`` is the \
     name of the URI parameter.
     """
-    required = attr.ib(repr=False, default=True)
+    required    = attr.ib(repr=False, default=True)
+    type        = attr.ib(repr=False, default="string")
 
 
 @attr.s
@@ -135,7 +190,8 @@ class QueryParameter(BaseParameter):
     "Named Parameters" section, e.g. ``/foo/bar?baz=123`` where ``baz`` \
     is the name of the query parameter.
     """
-    required = attr.ib(repr=False, default=False)
+    required    = attr.ib(repr=False, default=False)
+    type        = attr.ib(repr=False, default="string")
 
 
 @attr.s
@@ -148,7 +204,8 @@ class FormParameter(BaseParameter):
 
     where ``baz`` is the Form Parameter name.
     """
-    required = attr.ib(repr=False, default=False)
+    required    = attr.ib(repr=False, default=False)
+    type        = attr.ib(repr=False, default="string")
 
 
 class Documentation(object):
@@ -175,7 +232,7 @@ class Documentation(object):
 
 
 @attr.s
-class Header(object):
+class Header(BaseParameter):
     """
     Header with properties defined by the RAML spec's 'Named Parameters'
     section, e.g.:
@@ -213,26 +270,7 @@ class Header(object):
     :param str method: HTTP method for header, or ``None``
     :param bool required: If parameter is required. Defaults to ``False``.
     """
-    name         = attr.ib(repr=False)
-    display_name = attr.ib()
-    raw          = attr.ib(repr=False,
-                           validator=attr.validators.instance_of(dict))
-    desc         = attr.ib(repr=False)
-    example      = attr.ib(repr=False)
-    default      = attr.ib(repr=False)
-    min_length   = attr.ib(repr=False, validator=string_type_parameter)
-    max_length   = attr.ib(repr=False, validator=string_type_parameter)
-    minimum      = attr.ib(repr=False, validator=integer_number_type_parameter)
-    maximum      = attr.ib(repr=False, validator=integer_number_type_parameter)
-    config       = attr.ib(repr=False,
-                           validator=attr.validators.instance_of(dict))
-    errors       = attr.ib(repr=False)
     type         = attr.ib(repr=False, default="string", validator=header_type)
-    enum         = attr.ib(repr=False, default=None,
-                           validator=string_type_parameter)
-    repeat       = attr.ib(repr=False, default=False)
-    pattern      = attr.ib(repr=False, default=None,
-                           validator=string_type_parameter)
     method       = attr.ib(repr=False, default=None)
     required     = attr.ib(repr=False, default=False)
 

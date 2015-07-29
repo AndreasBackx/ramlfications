@@ -2,7 +2,6 @@
 # Copyright (c) 2015 Spotify AB
 
 from __future__ import absolute_import, division, print_function
-import re
 
 try:
     from collections import OrderedDict
@@ -14,7 +13,7 @@ from six import iteritems, iterkeys, itervalues
 
 
 from .parameters import (
-    Documentation, Header, Body, Response, URIParameter, QueryParameter,
+    Documentation, Header, Body, Response, URIParameter, QueryParameter, BaseParameter,
     FormParameter, SecurityScheme
 )
 from .raml import RootNode, ResourceNode, ResourceTypeNode, TraitNode
@@ -57,58 +56,14 @@ def parse_raml(loaded_raml, config):
     return root
 
 
-def _get(data, item, default=None):
+def _create_base_param_obj(attribute_data, param_obj, config, errors, **kwargs):
     """
-    Helper function to catch empty mappings in RAML. If item is optional
-    but not in the data, or data is ``None``, the default value is returned.
+    Helper function to create a BaseParameter object
 
-    :param data: RAML data
-    :param str item: RAML key
-    :param default: default value if item is not in dict
-    :param bool optional: If RAML item is optional or needs to be defined
-    :ret: value for RAML key
+    .. deprecated:: 0.2.0
+        Use :py:meth:`parameters.BaseParameter.init_list` instead.
     """
-    try:
-        return data.get(item, default)
-    except AttributeError:
-        return default
-
-
-def _create_base_param_obj(attribute_data, param_obj, config, errors, **kw):
-    """Helper function to create a BaseParameter object"""
-    objects = []
-
-    for key, value in list(iteritems(attribute_data)):
-        if param_obj is URIParameter:
-            required = _get(value, "required", default=True)
-        else:
-            required = _get(value, "required", default=False)
-        kwargs = dict(
-            name=key,
-            raw={key: value},
-            desc=_get(value, "description"),
-            display_name=_get(value, "displayName", key),
-            min_length=_get(value, "minLength"),
-            max_length=_get(value, "maxLength"),
-            minimum=_get(value, "minimum"),
-            maximum=_get(value, "maximum"),
-            default=_get(value, "default"),
-            enum=_get(value, "enum"),
-            example=_get(value, "example"),
-            required=required,
-            repeat=_get(value, "repeat", False),
-            pattern=_get(value, "pattern"),
-            type=_get(value, "type", "string"),
-            config=config,
-            errors=errors
-        )
-        if param_obj is Header:
-            kwargs["method"] = _get(kw, "method")
-
-        item = param_obj(**kwargs)
-        objects.append(item)
-
-    return objects or None
+    return param_obj.init_list(attribute_data, config, errors, **kwargs)
 
 
 def create_root(raml, config):
@@ -117,75 +72,11 @@ def create_root(raml, config):
 
     :param RAMLDict raml: loaded RAML file
     :returns: :py:class:`.raml.RootNode` object with API root attributes set
+
+    .. deprecated:: 0.2.0
+        Use :func:`raml.RootNode.from_file` instead.
     """
-
-    errors = []
-
-    def title():
-        return raml.get("title")
-
-    def version():
-        return raml.get("version")
-
-    def protocols():
-        explicit_protos = raml.get("protocols")
-        implicit_protos = re.findall(r"(https|http)", base_uri())
-        implicit_protos = [p.upper() for p in implicit_protos]
-
-        return explicit_protos or implicit_protos or None
-
-    def base_uri():
-        base_uri = raml.get("baseUri", "")
-        if "{version}" in base_uri:
-            base_uri = base_uri.replace("{version}", str(raml.get("version")))
-        return base_uri
-
-    def base_uri_params():
-        data = raml.get("baseUriParameters", {})
-        return _create_base_param_obj(data, URIParameter, config, errors)
-
-    def uri_params():
-        data = raml.get("uriParameters", {})
-        return _create_base_param_obj(data, URIParameter, config, errors)
-
-    def media_type():
-        return raml.get("mediaType")
-
-    def docs():
-        d = raml.get("documentation", [])
-        assert isinstance(d, list), "Error parsing documentation"
-        docs = [Documentation(i.get("title"), i.get("content")) for i in d]
-        return docs or None
-
-    def schemas():
-        _schemas = raml.get("schemas")
-        if not _schemas:
-            return None
-        schemas = []
-        for schema in _schemas:
-            value = load_schema(list(itervalues(schema))[0])
-            schemas.append({list(iterkeys(schema))[0]: value})
-        return schemas or None
-
-    def secured_by():
-        return raml.get("securedBy")
-
-    return RootNode(
-        raml_obj=raml,
-        raw=raml,
-        title=title(),
-        version=version(),
-        protocols=protocols(),
-        base_uri=base_uri(),
-        base_uri_params=base_uri_params(),
-        uri_params=uri_params(),
-        media_type=media_type(),
-        documentation=docs(),
-        schemas=schemas(),
-        config=config,
-        secured_by=secured_by(),
-        errors=errors
-    )
+    return RootNode.from_file(raml, config)
 
 
 def create_sec_schemes(raml_data, root):
@@ -347,44 +238,44 @@ def create_traits(raml_data, root):
     :returns: list of :py:class:`.raml.TraitNode` objects
     """
     def description():
-        return _get(data, "description")
+        return BaseParameter._get(data, "description")
 
     def media_type():
-        return _get(data, "mediaType")
+        return BaseParameter._get(data, "mediaType")
 
     def usage():
-        return _get(data, "usage")
+        return BaseParameter._get(data, "usage")
 
     def protocols():
-        return _get(data, "protocols")
+        return BaseParameter._get(data, "protocols")
 
     def query_params():
-        params = _get(data, "queryParameters", {})
+        params = BaseParameter._get(data, "queryParameters", {})
         return _create_base_param_obj(params, QueryParameter, root.config,
                                       root.errors)
 
     def uri_params():
-        params = _get(data, "uriParameters", {})
+        params = BaseParameter._get(data, "uriParameters", {})
         return _create_base_param_obj(params, URIParameter, root.config,
                                       root.errors)
 
     def form_params():
-        params = _get(data, "formParameters", {})
+        params = BaseParameter._get(data, "formParameters", {})
         return _create_base_param_obj(params, FormParameter, root.config,
                                       root.errors)
 
     def base_uri_params():
-        params = _get(data, "baseUriParameters", {})
+        params = BaseParameter._get(data, "baseUriParameters", {})
         return _create_base_param_obj(params, URIParameter, root.config,
                                       root.errors)
 
     def headers(data):
-        headers_ = _get(data, "headers", {})
+        headers_ = BaseParameter._get(data, "headers", {})
         return _create_base_param_obj(headers_, Header, root.config,
                                       root.errors)
 
     def body(data):
-        body = _get(data, "body", {})
+        body = BaseParameter._get(data, "body", {})
         body_objects = []
         for key, value in list(iteritems(body)):
             body = Body(
@@ -401,7 +292,7 @@ def create_traits(raml_data, root):
 
     def responses():
         response_objects = []
-        for key, value in list(iteritems(_get(data, "responses", {}))):
+        for key, value in list(iteritems(BaseParameter._get(data, "responses", {}))):
             response = Response(
                 code=key,
                 raw=value,
@@ -532,8 +423,8 @@ def create_resource_types(raml_data, root):
                     list(iteritems(inherited_params)))
 
     def get_attribute(res_data, method_data, item, default={}):
-        method_level = _get(method_data, item, default)
-        resource_level = _get(res_data, item, default)
+        method_level = BaseParameter._get(method_data, item, default)
+        resource_level = BaseParameter._get(res_data, item, default)
         return method_level, resource_level
 
     def get_inherited_item(items, item_name):
@@ -551,8 +442,8 @@ def create_resource_types(raml_data, root):
         return items
 
     def get_attribute_dict(data, item):
-        resource_level = _get(v, item, {})
-        method_level = _get(data, item, {})
+        resource_level = BaseParameter._get(v, item, {})
+        method_level = BaseParameter._get(data, item, {})
         return dict(list(iteritems(resource_level)) +
                     list(iteritems(method_level)))
 
@@ -564,8 +455,8 @@ def create_resource_types(raml_data, root):
         return data.get("displayName", name)
 
     def headers(data):
-        _headers = _get(data, "headers", {})
-        if _get(v, "type"):
+        _headers = BaseParameter._get(data, "headers", {})
+        if BaseParameter._get(v, "type"):
             _headers = get_inherited_item(_headers, "headers")
 
         header_objs = _create_base_param_obj(_headers, Header, root.config,
@@ -577,8 +468,8 @@ def create_resource_types(raml_data, root):
         return header_objs
 
     def body(data):
-        _body = _get(data, "body", default={})
-        if _get(v, "type"):
+        _body = BaseParameter._get(data, "body", default={})
+        if BaseParameter._get(v, "type"):
             _body = get_inherited_item(_body, "body")
 
         body_objects = []
@@ -597,13 +488,13 @@ def create_resource_types(raml_data, root):
 
     def responses(data):
         response_objects = []
-        _responses = _get(data, "responses", {})
-        if _get(v, "type"):
+        _responses = BaseParameter._get(data, "responses", {})
+        if BaseParameter._get(v, "type"):
             _responses = get_inherited_item(_responses, "responses")
 
         for key, value in list(iteritems(_responses)):
             _headers = data.get("responses", {}).get(key, {})
-            _headers = _get(_headers, "headers", {})
+            _headers = BaseParameter._get(_headers, "headers", {})
             header_objs = _create_base_param_obj(_headers, Header,
                                                  root.config, root.errors)
             if header_objs:
@@ -612,7 +503,7 @@ def create_resource_types(raml_data, root):
             response = Response(
                 code=key,
                 raw={key: value},
-                desc=_get(value, "description"),
+                desc=BaseParameter._get(value, "description"),
                 headers=header_objs,
                 body=body(value),
                 config=root.config,
@@ -627,7 +518,7 @@ def create_resource_types(raml_data, root):
     def uri_params(data):
         uri_params = get_attribute_dict(data, "uriParameters")
 
-        if _get(v, "type"):
+        if BaseParameter._get(v, "type"):
             uri_params = get_inherited_type_params(v, "uriParameters",
                                                    uri_params)
         return _create_base_param_obj(uri_params, URIParameter, root.config,
@@ -642,7 +533,7 @@ def create_resource_types(raml_data, root):
     def query_params(data):
         query_params = get_attribute_dict(data, "queryParameters")
 
-        if _get(v, "type"):
+        if BaseParameter._get(v, "type"):
             query_params = get_inherited_type_params(v, "queryParameters",
                                                      query_params)
 
@@ -652,7 +543,7 @@ def create_resource_types(raml_data, root):
     def form_params(data):
         form_params = get_attribute_dict(data, "formParameters")
 
-        if _get(v, "type"):
+        if BaseParameter._get(v, "type"):
             form_params = get_inherited_type_params(v, "formParameters",
                                                     form_params)
 
@@ -660,18 +551,18 @@ def create_resource_types(raml_data, root):
                                       root.errors)
 
     def media_type():
-        return _get(v, "mediaType")
+        return BaseParameter._get(v, "mediaType")
 
     def description():
         # prefer the resourceType method description
         if meth:
-            method_attr = _get(v, meth)
-            desc = _get(method_attr, "description")
-            return desc or _get(v, "description")
-        return _get(v, "description")
+            method_attr = BaseParameter._get(v, meth)
+            desc = BaseParameter._get(method_attr, "description")
+            return desc or BaseParameter._get(v, "description")
+        return BaseParameter._get(v, "description")
 
     def type_():
-        return _get(v, "type")
+        return BaseParameter._get(v, "type")
 
     def method(meth):
         if not meth:
@@ -681,7 +572,7 @@ def create_resource_types(raml_data, root):
         return meth
 
     def usage():
-        return _get(v, "usage")
+        return BaseParameter._get(v, "usage")
 
     def optional():
         if meth:
@@ -1051,20 +942,20 @@ def create_node(name, raw_data, method, parent, root):
             for k, v in list(iteritems(headers)):
                 header = Header(
                     name=k,
-                    display_name=_get(v, "displayName", default=k),
+                    display_name=BaseParameter._get(v, "displayName", default=k),
                     method=method,
                     raw=headers,
-                    type=_get(v, "type", default="string"),
-                    desc=_get(v, "description"),
-                    example=_get(v, "example"),
-                    default=_get(v, "default"),
-                    minimum=_get(v, "minimum"),
-                    maximum=_get(v, "maximum"),
-                    min_length=_get(v, "minLength"),
-                    max_length=_get(v, "maxLength"),
-                    enum=_get(v, "enum"),
-                    repeat=_get(v, "repeat", default=False),
-                    pattern=_get(v, "pattern"),
+                    type=BaseParameter._get(v, "type", default="string"),
+                    desc=BaseParameter._get(v, "description"),
+                    example=BaseParameter._get(v, "example"),
+                    default=BaseParameter._get(v, "default"),
+                    minimum=BaseParameter._get(v, "minimum"),
+                    maximum=BaseParameter._get(v, "maximum"),
+                    min_length=BaseParameter._get(v, "minLength"),
+                    max_length=BaseParameter._get(v, "maxLength"),
+                    enum=BaseParameter._get(v, "enum"),
+                    repeat=BaseParameter._get(v, "repeat", default=False),
+                    pattern=BaseParameter._get(v, "pattern"),
                     config=root.config,
                     errors=root.errors
                 )
@@ -1133,7 +1024,7 @@ def create_node(name, raw_data, method, parent, root):
                 resp = [r for r in resp_objs if r.code == k][0]
                 index = resp_objs.index(resp)
                 inherit_resp = resp_objs.pop(index)
-                headers = resp_headers(_get(v, "headers", default={}))
+                headers = resp_headers(BaseParameter._get(v, "headers", default={}))
                 if inherit_resp.headers:
                     headers = _remove_duplicates(inherit_resp.headers, headers)
                     # if headers:
@@ -1159,13 +1050,13 @@ def create_node(name, raw_data, method, parent, root):
                 )
                 resp_objs.insert(index, resp)  # preserve order
             else:
-                _headers = _get(v, "headers", default={})
-                _body = _get(v, "body", default={})
+                _headers = BaseParameter._get(v, "headers", default={})
+                _body = BaseParameter._get(v, "body", default={})
                 resp = Response(
                     code=k,
                     raw={k: v},
                     method=method,
-                    desc=_get(v, "description"),
+                    desc=BaseParameter._get(v, "description"),
                     headers=resp_headers(_headers),
                     body=resp_body(_body),
                     config=root.config,

@@ -4,10 +4,12 @@
 from __future__ import absolute_import, division, print_function
 
 import attr
+from six import itervalues
 from six.moves import BaseHTTPServer as httpserver  # NOQA
 
-from .parameters import Content
+from .parameters import Content, URIParameter, Documentation
 from .validate import *  # NOQA
+from .utils import load_schema
 
 HTTP_RESP_CODES = httpserver.BaseHTTPRequestHandler.responses.keys()
 AVAILABLE_METHODS = [
@@ -69,6 +71,68 @@ class RootNode(object):
     config           = attr.ib(repr=False,
                                validator=attr.validators.instance_of(dict))
     errors           = attr.ib(repr=False)
+
+    @classmethod
+    def from_file(cls, raml, config):
+        """
+        Create a RootNode from a RAML file and config file.
+
+        :param RAMLDict raml: loaded RAML file, OrderedDict
+        :returns: :py:class:`.raml.RootNode` object with API root attributes set
+        """
+        version = raml.get("version")
+
+        base_uri = raml.get("baseUri", "").replace("{version}", str(version))
+
+        explicit_protos = raml.get("protocols")
+        implicit_protos = re.findall(r"(https|http)", base_uri)
+        implicit_protos = [p.upper() for p in implicit_protos]
+        protocols = explicit_protos or implicit_protos or None
+
+        base_uri_params = URIParameter.init_list(
+            raml.get(
+                "baseUriParameters",
+                {}
+            ),
+            config
+        )
+
+        uri_params = URIParameter.init_list(
+            raml.get(
+                "uriParameters",
+                {}
+            ),
+            config
+        )
+
+        d = raml.get("documentation", [])
+        assert isinstance(d, list), "Error parsing documentation"
+        docs = [Documentation(i.get("title"), i.get("content")) for i in d] or None
+
+        _schemas = raml.get("schemas")
+        _schemas = [] if not _schemas else _schemas
+        schemas = []
+        for schema in _schemas:
+            value = load_schema(list(itervalues(schema))[0])
+            schemas.append({list(iterkeys(schema))[0]: value})
+        schemas = schemas or None
+
+        return cls(
+            raml_obj=raml,
+            raw=raml,
+            title=raml.get("title"),
+            version=version,
+            protocols=protocols,
+            base_uri=base_uri,
+            base_uri_params=base_uri_params,
+            uri_params=uri_params,
+            media_type=raml.get("mediaType"),
+            documentation=docs,
+            schemas=schemas,
+            config=config,
+            secured_by=raml.get("securedBy"),
+            errors=[]
+        )
 
 
 @attr.s
