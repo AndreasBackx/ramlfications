@@ -3,13 +3,20 @@
 
 from __future__ import absolute_import, division, print_function
 
+import re
+
 import attr
-from six import itervalues
+from six import iterkeys, itervalues
 from six.moves import BaseHTTPServer as httpserver  # NOQA
 
-from .parameters import Content, URIParameter, Documentation
-from .validate import *  # NOQA
+from .parameters import Content, Documentation, URIParameter
 from .utils import load_schema
+from .validate import (assigned_res_type, assigned_traits,
+                       defined_resource_type, defined_trait, root_base_uri,
+                       root_base_uri_params, root_docs, root_media_type,
+                       root_protocols, root_resources, root_schemas,
+                       root_secured_by, root_title, root_uri_params,
+                       root_version)
 
 HTTP_RESP_CODES = httpserver.BaseHTTPRequestHandler.responses.keys()
 AVAILABLE_METHODS = [

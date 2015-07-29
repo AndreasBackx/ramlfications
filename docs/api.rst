@@ -32,6 +32,8 @@ parser
 
 .. autofunction:: ramlfications.parser.create_root
 
+.. autofunction:: ramlfications.parser.create_sec_schemes
+
 .. autofunction:: ramlfications.parser.create_traits
 
 .. autofunction:: ramlfications.parser.create_resource_types

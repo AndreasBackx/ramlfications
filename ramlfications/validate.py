@@ -11,7 +11,6 @@ from ._decorators import collecterrors
 
 from .errors import *  # NOQA
 
-
 #####
 # RAMLRoot validators
 #####

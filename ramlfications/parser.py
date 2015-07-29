@@ -13,7 +13,7 @@ from six import iteritems, iterkeys, itervalues
 
 
 from .parameters import (
-    Documentation, Header, Body, Response, URIParameter, QueryParameter, BaseParameter,
+    Header, Body, Response, URIParameter, QueryParameter, BaseParameter,
     FormParameter, SecurityScheme
 )
 from .raml import RootNode, ResourceNode, ResourceTypeNode, TraitNode
@@ -86,7 +86,7 @@ def create_sec_schemes(raml_data, root):
     :param dict raml_data: Raw RAML data
     :param RootNode root: Root Node
     :returns: list of :py:class:`.parameters.SecurityScheme` objects
-    """
+
     def map_object_types(item):
         return {
             "headers": headers,
@@ -227,6 +227,11 @@ def create_sec_schemes(raml_data, root):
         node = final_wrap(node)
         scheme_objs.append(node)
     return scheme_objs or None
+
+    .. deprecated:: 0.2.0
+        Use :py:meth:`parameters.SecurityScheme.from_file` instead.
+    """
+    return SecurityScheme.from_file(raml_data, root)
 
 
 def create_traits(raml_data, root):

@@ -5,9 +5,13 @@ from __future__ import absolute_import, division, print_function
 
 import attr
 import markdown2 as md
+from six import iteritems, iterkeys, itervalues
 
-from .validate import *  # NOQA
-from six import iteritems
+from .utils import load_schema
+from .validate import (body_example, body_form, body_mime_type, body_schema,
+                       defined_sec_scheme_settings, header_type,
+                       integer_number_type_parameter, response_code,
+                       string_type_parameter)
 
 HTTP_METHODS = [
     "get", "post", "put", "delete", "patch", "options",
@@ -135,39 +139,41 @@ class BaseParameter(object):
             return default
 
     @classmethod
-    def init_list(cls, attribute_data, config, errors=[], **kwargs):
+    def init(cls, name, data, config, errors=[], **kwargs):
+        if cls is URIParameter:
+            required = cls._get(data, "required", default=True)
+        else:
+            required = cls._get(data, "required", default=False)
+        arguments = dict(
+            name=name,
+            raw={name: data},
+            desc=cls._get(data, "description"),
+            display_name=cls._get(data, "displayName", name),
+            min_length=cls._get(data, "minLength"),
+            max_length=cls._get(data, "maxLength"),
+            minimum=cls._get(data, "minimum"),
+            maximum=cls._get(data, "maximum"),
+            default=cls._get(data, "default"),
+            enum=cls._get(data, "enum"),
+            example=cls._get(data, "example"),
+            required=required,
+            repeat=cls._get(data, "repeat", False),
+            pattern=cls._get(data, "pattern"),
+            type=cls._get(data, "type", "string"),
+            config=config,
+            errors=errors
+        )
+        if cls is Header:
+            arguments["method"] = cls._get(kwargs, "method")
+        return cls(**arguments)
+
+    @classmethod
+    def init_list(cls, data, config, errors=[], **kwargs):
         """Initialise a list of BaseParameters out of a list of attributes."""
         objects = []
 
-        for key, value in list(iteritems(attribute_data)):
-            if cls is URIParameter:
-                required = cls._get(value, "required", default=True)
-            else:
-                required = cls._get(value, "required", default=False)
-            arguments = dict(
-                name=key,
-                raw={key: value},
-                desc=cls._get(value, "description"),
-                display_name=cls._get(value, "displayName", key),
-                min_length=cls._get(value, "minLength"),
-                max_length=cls._get(value, "maxLength"),
-                minimum=cls._get(value, "minimum"),
-                maximum=cls._get(value, "maximum"),
-                default=cls._get(value, "default"),
-                enum=cls._get(value, "enum"),
-                example=cls._get(value, "example"),
-                required=required,
-                repeat=cls._get(value, "repeat", False),
-                pattern=cls._get(value, "pattern"),
-                type=cls._get(value, "type", "string"),
-                config=config,
-                errors=errors
-            )
-            if cls is Header:
-                arguments["method"] = cls._get(kwargs, "method")
-
-            item = cls(**arguments)
-            objects.append(item)
+        for key, value in list(iteritems(data)):
+            objects.append(cls.init(key, value, config, errors, **kwargs))
 
         return objects or None
 
@@ -330,6 +336,29 @@ class Body(object):
                     attr = getattr(param, n, None)
                     setattr(self, n, attr)
 
+    @classmethod
+    def init(cls, name, data, config, errors=[], **kwargs):
+        arguments = dict(
+            mime_type=name,
+            raw=data,
+            schema=load_schema(BaseParameter._get(data, "schema")),
+            example=load_schema(BaseParameter._get(data, "example")),
+            form_params=BaseParameter._get(data, "formParameters"),
+            config=config,
+            errors=errors
+        )
+
+        return cls(**arguments)
+
+    @classmethod
+    def init_list(cls, data, config, errors=[], **kwargs):
+        # TODO Remove this redundant code that is already in BaseParameter
+        # BaseParameter needs to be reworked.
+        bodies = []
+        for key, value in list(iteritems(data)):
+            bodies.append(cls.init(key, value, config, errors, **kwargs))
+        return bodies
+
 
 @attr.s
 class Response(object):
@@ -368,6 +397,26 @@ class Response(object):
                     attr = getattr(param, n, None)
                     setattr(self, n, attr)
 
+    @classmethod
+    def init(cls, name, data, config, errors=[], **kwargs):
+        arguments = dict(
+            code=name,
+            raw=data,
+            desc=data.get("description"),
+            headers=Header.init_list(data.get("headers", {}), config),
+            body=Body.init_list(data.get("body", {}), config),
+            config=config,
+            errors=errors
+        )
+        return cls(**arguments)
+
+    @classmethod
+    def init_list(cls, data, config, errors=[], **kwargs):
+        responses = []
+        for key, value in list(iteritems(data)):
+            responses.append(cls.init(key, value, config, errors, **kwargs))
+        return sorted(responses, key=lambda x: x.code)
+
 
 @attr.s
 class SecurityScheme(object):
@@ -398,3 +447,61 @@ class SecurityScheme(object):
         if self.desc:
             return Content(self.desc)
         return None
+
+    @classmethod
+    def from_file(cls, raml, root):
+        """
+        Parse security schemes into ``SecurityScheme`` objects
+
+        :param dict raml_data: Raw RAML data
+        :param RootNode root: Root Node
+        :returns: list of :py:class:`.parameters.SecurityScheme` objects
+        """
+
+        schemes = raml.get("securitySchemes", [])
+        scheme_objs = []
+
+        classes = {
+            "headers": Header,
+            "body": Body,
+            "responses": Response,
+            "queryParameters": ["query_params", QueryParameter],
+            "uriParameters": ["uri_params", URIParameter],
+            "formParameters": ["form_params", FormParameter]
+        }
+
+        other = {
+            "usage": "usage",
+            "mediaType": "media_type",
+            "protocols": "protocols"
+        }
+
+        for s in schemes:
+            name = list(iterkeys(s))[0]
+            data = list(itervalues(s))[0]
+            scheme = SecurityScheme(
+                    name=name,
+                    raw=data,
+                    type=data.get("type"),
+                    described_by=data.get("describedBy", {}),
+                    desc=data.get("description"),
+                    settings=data.get("settings"),
+                    config=root.config,
+                    errors=root.errors
+                )
+
+            for obj, scheme_data in list(iteritems(scheme.described_by)):
+                if obj in classes:
+                    value = classes[obj]
+                    diff_name = isinstance(value, list)
+                    attribute_name = value[0] if diff_name else obj
+                    data_cls = value[1] if diff_name else value
+
+                    setattr(scheme, attribute_name, data_cls.init_list(scheme_data, root.config))
+                elif obj == "documentation":
+                        assert isinstance(scheme_data, list), "Error parsing documentation"
+                        scheme.documentation = [Documentation(i.get("title"), i.get("content")) for i in scheme_data] or None
+                elif obj in other:
+                    setattr(scheme, other[obj], scheme_data)
+            scheme_objs.append(scheme)
+        return scheme_objs or None
