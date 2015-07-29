@@ -125,7 +125,8 @@ class BaseParameter(object):
     def _get(data, item, default=None):
         """
         Helper function to catch empty mappings in RAML. If item is optional
-        but not in the data, or data is ``None``, the default value is returned.
+        but not in the data, or data is ``None``, the default value is
+        returned.
 
         :param data: RAML data
         :param str item: RAML key
@@ -357,7 +358,7 @@ class Body(object):
         bodies = []
         for key, value in list(iteritems(data)):
             bodies.append(cls.init(key, value, config, errors, **kwargs))
-        return bodies
+        return bodies or None
 
 
 @attr.s
@@ -402,9 +403,25 @@ class Response(object):
         arguments = dict(
             code=name,
             raw=data,
-            desc=data.get("description"),
-            headers=Header.init_list(data.get("headers", {}), config),
-            body=Body.init_list(data.get("body", {}), config),
+            desc=BaseParameter._get(
+                data,
+                "description"
+            ),
+            headers=Header.init_list(
+                BaseParameter._get(
+                    data,
+                    "headers",
+                    {}
+                ),
+                config
+            ),
+            body=Body.init_list(
+                BaseParameter._get(
+                    data,
+                    "body", {}
+                ),
+                config
+            ),
             config=config,
             errors=errors
         )
@@ -415,7 +432,7 @@ class Response(object):
         responses = []
         for key, value in list(iteritems(data)):
             responses.append(cls.init(key, value, config, errors, **kwargs))
-        return sorted(responses, key=lambda x: x.code)
+        return sorted(responses, key=lambda x: x.code) or None
 
 
 @attr.s
@@ -480,15 +497,15 @@ class SecurityScheme(object):
             name = list(iterkeys(s))[0]
             data = list(itervalues(s))[0]
             scheme = SecurityScheme(
-                    name=name,
-                    raw=data,
-                    type=data.get("type"),
-                    described_by=data.get("describedBy", {}),
-                    desc=data.get("description"),
-                    settings=data.get("settings"),
-                    config=root.config,
-                    errors=root.errors
-                )
+                name=name,
+                raw=data,
+                type=BaseParameter._get(data, "type"),
+                described_by=BaseParameter._get(data, "describedBy", {}),
+                desc=BaseParameter._get(data, "description"),
+                settings=BaseParameter._get(data, "settings"),
+                config=root.config,
+                errors=root.errors
+            )
 
             for obj, scheme_data in list(iteritems(scheme.described_by)):
                 if obj in classes:
@@ -497,10 +514,21 @@ class SecurityScheme(object):
                     attribute_name = value[0] if diff_name else obj
                     data_cls = value[1] if diff_name else value
 
-                    setattr(scheme, attribute_name, data_cls.init_list(scheme_data, root.config))
+                    setattr(
+                        scheme,
+                        attribute_name,
+                        data_cls.init_list(
+                            scheme_data,
+                            root.config
+                        )
+                    )
                 elif obj == "documentation":
-                        assert isinstance(scheme_data, list), "Error parsing documentation"
-                        scheme.documentation = [Documentation(i.get("title"), i.get("content")) for i in scheme_data] or None
+                        assert isinstance(scheme_data, list), \
+                            "Error parsing documentation"
+                        scheme.documentation = [
+                            Documentation(i.get("title"), i.get("content"))
+                            for i in scheme_data
+                        ] or None
                 elif obj in other:
                     setattr(scheme, other[obj], scheme_data)
             scheme_objs.append(scheme)

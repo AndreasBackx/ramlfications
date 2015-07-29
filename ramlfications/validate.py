@@ -15,6 +15,7 @@ from .errors import *  # NOQA
 # RAMLRoot validators
 #####
 
+
 @collecterrors
 def root_version(inst, attr, value):
     """Require an API Version (e.g. api.foo.com/v1)."""

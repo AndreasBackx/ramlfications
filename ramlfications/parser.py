@@ -56,14 +56,14 @@ def parse_raml(loaded_raml, config):
     return root
 
 
-def _create_base_param_obj(attribute_data, param_obj, config, errors, **kwargs):
+def _create_base_param_obj(attribute_data, obj, config, errors, **kwargs):
     """
     Helper function to create a BaseParameter object
 
     .. deprecated:: 0.2.0
         Use :py:meth:`parameters.BaseParameter.init_list` instead.
     """
-    return param_obj.init_list(attribute_data, config, errors, **kwargs)
+    return obj.init_list(attribute_data, config, errors, **kwargs)
 
 
 def create_root(raml, config):
@@ -87,147 +87,6 @@ def create_sec_schemes(raml_data, root):
     :param RootNode root: Root Node
     :returns: list of :py:class:`.parameters.SecurityScheme` objects
 
-    def map_object_types(item):
-        return {
-            "headers": headers,
-            "body": body,
-            "responses": responses,
-            "queryParameters": query_params,
-            "uriParameters": uri_params,
-            "formParameters": form_params,
-            "usage": usage,
-            "mediaType": media_type,
-            "protocols": protocols,
-            "documentation": documentation,
-        }[item]
-
-    def type_():
-        return data.get("type")
-
-    def headers(header_data):
-        _headers = []
-        header_data = header_data.get("headers", {})
-        for k, v in list(iteritems(header_data)):
-            h = _create_base_param_obj({k: v}, Header, root.config,
-                                       root.errors)
-            _headers.extend(h)
-        return _headers
-
-    def body(body_data):
-        body_data = body_data.get("body", {})
-        _body = []
-        for k, v in list(iteritems(body_data)):
-            body = Body(
-                mime_type=k,
-                raw=v,
-                schema=load_schema(v.get("schema")),
-                example=load_schema(v.get("example")),
-                form_params=v.get("formParameters"),
-                config=root.config,
-                errors=root.errors
-            )
-            _body.append(body)
-        return _body
-
-    def responses(resp_data):
-        _resps = []
-        resp_data = resp_data.get("responses", {})
-        for k, v in list(iteritems(resp_data)):
-            response = Response(
-                code=k,
-                raw=v,
-                desc=v.get("description"),
-                headers=headers(v.get("headers", {})),
-                body=body(v.get("body", {})),
-                config=root.config,
-                errors=root.errors
-            )
-            _resps.append(response)
-        return sorted(_resps, key=lambda x: x.code)
-
-    def query_params(param_data):
-        param_data = param_data.get("queryParameters", {})
-        _params = []
-        for k, v in list(iteritems(param_data)):
-            p = _create_base_param_obj({k: v}, QueryParameter, root.config,
-                                       root.errors)
-            _params.extend(p)
-        return _params
-
-    def uri_params(param_data):
-        param_data = param_data.get("uriParameters")
-        _params = []
-        for k, v in list(iteritems(param_data)):
-            p = _create_base_param_obj({k: v}, URIParameter, root.config,
-                                       root.errors)
-            _params.extend(p)
-        return _params
-
-    def form_params(param_data):
-        param_data = param_data.get("formParameters", {})
-        _params = []
-        for k, v in list(iteritems(param_data)):
-            p = _create_base_param_obj({k: v}, FormParameter, root.config,
-                                       root.errors)
-            _params.extend(p)
-        return _params
-
-    def usage(desc_by_data):
-        return desc_by_data.get("usage")
-
-    def media_type(desc_by_data):
-        return desc_by_data.get("mediaType")
-
-    def protocols(desc_by_data):
-        return desc_by_data.get("protocols")
-
-    def documentation(desc_by_data):
-        d = desc_by_data.get("documentation", [])
-        assert isinstance(d, list), "Error parsing documentation"
-        docs = [Documentation(i.get("title"), i.get("content")) for i in d]
-        return docs or None
-
-    def set_property(node, obj, node_data):
-        func = map_object_types(obj)
-        item_objs = func({obj: node_data})
-        setattr(node, func.__name__, item_objs)
-
-    def described_by():
-        return data.get("describedBy", {})
-
-    def description():
-        return data.get("description")
-
-    def settings():
-        return data.get("settings")
-
-    def initial_wrap(key, data):
-        return SecurityScheme(
-            name=key,
-            raw=data,
-            type=type_(),
-            described_by=described_by(),
-            desc=description(),
-            settings=settings(),
-            config=root.config,
-            errors=root.errors
-        )
-
-    def final_wrap(node):
-        for obj, node_data in list(iteritems(node.described_by)):
-            set_property(node, obj, node_data)
-        return node
-
-    schemes = raml_data.get("securitySchemes", [])
-    scheme_objs = []
-    for s in schemes:
-        name = list(iterkeys(s))[0]
-        data = list(itervalues(s))[0]
-        node = initial_wrap(name, data)
-        node = final_wrap(node)
-        scheme_objs.append(node)
-    return scheme_objs or None
-
     .. deprecated:: 0.2.0
         Use :py:meth:`parameters.SecurityScheme.from_file` instead.
     """
@@ -241,101 +100,11 @@ def create_traits(raml_data, root):
     :param dict raml_data: Raw RAML data
     :param RootNode root: Root Node
     :returns: list of :py:class:`.raml.TraitNode` objects
+
+    .. deprecated:: 0.2.0
+        Use :py:meth:`parameters.SecurityScheme.from_file` instead.
     """
-    def description():
-        return BaseParameter._get(data, "description")
-
-    def media_type():
-        return BaseParameter._get(data, "mediaType")
-
-    def usage():
-        return BaseParameter._get(data, "usage")
-
-    def protocols():
-        return BaseParameter._get(data, "protocols")
-
-    def query_params():
-        params = BaseParameter._get(data, "queryParameters", {})
-        return _create_base_param_obj(params, QueryParameter, root.config,
-                                      root.errors)
-
-    def uri_params():
-        params = BaseParameter._get(data, "uriParameters", {})
-        return _create_base_param_obj(params, URIParameter, root.config,
-                                      root.errors)
-
-    def form_params():
-        params = BaseParameter._get(data, "formParameters", {})
-        return _create_base_param_obj(params, FormParameter, root.config,
-                                      root.errors)
-
-    def base_uri_params():
-        params = BaseParameter._get(data, "baseUriParameters", {})
-        return _create_base_param_obj(params, URIParameter, root.config,
-                                      root.errors)
-
-    def headers(data):
-        headers_ = BaseParameter._get(data, "headers", {})
-        return _create_base_param_obj(headers_, Header, root.config,
-                                      root.errors)
-
-    def body(data):
-        body = BaseParameter._get(data, "body", {})
-        body_objects = []
-        for key, value in list(iteritems(body)):
-            body = Body(
-                mime_type=key,
-                raw=value,
-                schema=load_schema(value.get("schema")),
-                example=load_schema(value.get("example")),
-                form_params=value.get("formParameters"),
-                config=root.config,
-                errors=root.errors
-            )
-            body_objects.append(body)
-        return body_objects or None
-
-    def responses():
-        response_objects = []
-        for key, value in list(iteritems(BaseParameter._get(data, "responses", {}))):
-            response = Response(
-                code=key,
-                raw=value,
-                desc=value.get("description"),
-                headers=headers(value),
-                body=body(value),
-                config=root.config,
-                errors=root.errors
-            )
-            response_objects.append(response)
-        return sorted(response_objects, key=lambda x: x.code) or None
-
-    def wrap(key, data):
-        return TraitNode(
-            name=key,
-            raw=data,
-            root=root,
-            query_params=query_params(),
-            uri_params=uri_params(),
-            form_params=form_params(),
-            base_uri_params=base_uri_params(),
-            headers=headers(data),
-            body=body(data),
-            responses=responses(),
-            desc=description(),
-            media_type=media_type(),
-            usage=usage(),
-            protocols=protocols(),
-            errors=root.errors
-        )
-
-    traits = raml_data.get("traits", [])
-    trait_objects = []
-    for trait in traits:
-        name = list(iterkeys(trait))[0]
-        data = list(itervalues(trait))[0]
-        trait_objects.append(wrap(name, data))
-    return trait_objects or None
+    return TraitNode.from_file(raml_data, root)
 
 
 def create_resource_types(raml_data, root):
@@ -947,7 +716,11 @@ def create_node(name, raw_data, method, parent, root):
             for k, v in list(iteritems(headers)):
                 header = Header(
                     name=k,
-                    display_name=BaseParameter._get(v, "displayName", default=k),
+                    display_name=BaseParameter._get(
+                        v,
+                        "displayName",
+                        default=k
+                    ),
                     method=method,
                     raw=headers,
                     type=BaseParameter._get(v, "type", default="string"),
@@ -1029,7 +802,13 @@ def create_node(name, raw_data, method, parent, root):
                 resp = [r for r in resp_objs if r.code == k][0]
                 index = resp_objs.index(resp)
                 inherit_resp = resp_objs.pop(index)
-                headers = resp_headers(BaseParameter._get(v, "headers", default={}))
+                headers = resp_headers(
+                    BaseParameter._get(
+                        v,
+                        "headers",
+                        default={}
+                    )
+                )
                 if inherit_resp.headers:
                     headers = _remove_duplicates(inherit_resp.headers, headers)
                     # if headers:

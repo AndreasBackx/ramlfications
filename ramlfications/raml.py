@@ -9,7 +9,9 @@ import attr
 from six import iterkeys, itervalues
 from six.moves import BaseHTTPServer as httpserver  # NOQA
 
-from .parameters import Content, Documentation, URIParameter
+from .parameters import (BaseParameter, Body, Content, Documentation,
+                         FormParameter, Header, QueryParameter, Response,
+                         URIParameter)
 from .utils import load_schema
 from .validate import (assigned_res_type, assigned_traits,
                        defined_resource_type, defined_trait, root_base_uri,
@@ -85,7 +87,7 @@ class RootNode(object):
         Create a RootNode from a RAML file and config file.
 
         :param RAMLDict raml: loaded RAML file, OrderedDict
-        :returns: :py:class:`.raml.RootNode` object with API root attributes set
+        :returns: :py:class:`.raml.RootNode` object with API root attrs set
         """
         version = raml.get("version")
 
@@ -114,7 +116,10 @@ class RootNode(object):
 
         d = raml.get("documentation", [])
         assert isinstance(d, list), "Error parsing documentation"
-        docs = [Documentation(i.get("title"), i.get("content")) for i in d] or None
+        docs = [
+            Documentation(i.get("title"), i.get("content"))
+            for i in d
+        ] or None
 
         _schemas = raml.get("schemas")
         _schemas = [] if not _schemas else _schemas
@@ -196,6 +201,94 @@ class TraitNode(BaseNode):
     name  = attr.ib()
     raw   = attr.ib(repr=False, validator=defined_trait)
     usage = attr.ib(repr=False)
+
+    @classmethod
+    def from_file(cls, raml, root):
+        """
+        Parse traits into ``Trait`` objects.
+
+        :param dict raml_data: Raw RAML data
+        :param RootNode root: Root Node
+        :returns: list of :py:class:`.raml.TraitNode` objects
+        """
+
+        traits_data = raml.get("traits", [])
+        traits = []
+
+        for trait_data in traits_data:
+            name = list(iterkeys(trait_data))[0]
+            data = list(itervalues(trait_data))[0]
+
+            traits.append(
+                TraitNode(
+                    name=name,
+                    raw=data,
+                    root=root,
+                    query_params=QueryParameter.init_list(
+                        BaseParameter._get(
+                            data,
+                            "queryParameters",
+                            {}
+                        ),
+                        root.config
+                    ),
+                    uri_params=URIParameter.init_list(
+                        BaseParameter._get(
+                            data,
+                            "uriParameters",
+                            {}
+                        ),
+                        root.config
+                    ),
+                    form_params=FormParameter.init_list(
+                        BaseParameter._get(
+                            data,
+                            "formParameters",
+                            {}
+                        ),
+                        root.config
+                    ),
+                    base_uri_params=URIParameter.init_list(
+                        BaseParameter._get(
+                            data,
+                            "baseUriParameters",
+                            {}
+                        ),
+                        root.config
+                    ),
+                    headers=Header.init_list(
+                        BaseParameter._get(
+                            data,
+                            "headers",
+                            {}
+                        ),
+                        root.config
+                    ),
+                    body=Body.init_list(
+                        BaseParameter._get(
+                            data,
+                            "body",
+                            {}
+                        ),
+                        root.config
+                    ),
+                    responses=Response.init_list(
+                        BaseParameter._get(
+                            data,
+                            "responses",
+                            {}
+                        ),
+                        root.config
+                    ),
+                    desc=BaseParameter._get(data, "description"),
+                    media_type=BaseParameter._get(data, "mediaType"),
+                    usage=BaseParameter._get(data, "usage"),
+                    protocols=BaseParameter._get(data, "protocols"),
+                    errors=root.errors
+                )
+            )
+
+        return traits or None
 
 
 @attr.s

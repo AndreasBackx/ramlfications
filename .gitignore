@@ -30,3 +30,5 @@ coverage.xml
 docs/_build/
 docs/_templates/
 cover
+.eggs/
+.python-version
